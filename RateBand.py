@@ -84,14 +84,39 @@ class RateBand(gl.Contract):
                 raise gl.vm.UserError("rate source returned an unusable value")
             return str(scaled) + "|" + day
 
+        def _text(value):
+            if isinstance(value, str):
+                return value
+            if isinstance(value, bytes):
+                return value.decode("utf-8", "replace")
+            data = getattr(value, "calldata", None)
+            if isinstance(data, bytes):
+                return data.decode("utf-8", "replace")
+            if data is not None:
+                return str(data)
+            return str(value)
+
+        def _scaled(value):
+            text = _text(value)
+            number = text.split("|", 1)[0]
+            digits = ""
+            for ch in number:
+                if ch.isdigit():
+                    digits += ch
+                elif digits:
+                    break
+            if digits == "":
+                return 0
+            return int(digits)
+
         def validator_fn(leader_result):
-            if not isinstance(leader_result, str) or "|" not in leader_result:
-                return False
-            leader_scaled = int(leader_result.split("|", 1)[0])
+            leader_scaled = _scaled(leader_result)
             if leader_scaled <= 0:
                 return False
-            own = leader_fn()
-            own_scaled = int(own.split("|", 1)[0])
+            try:
+                own_scaled = _scaled(leader_fn())
+            except Exception:
+                return False
             if own_scaled <= 0:
                 return False
             diff = abs(leader_scaled - own_scaled)
